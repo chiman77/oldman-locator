@@ -365,7 +365,6 @@ body { font-family: -apple-system, sans-serif; }
             } catch(e) {}
           }
         })
-        renderSidebar()
       }
 
       function maskPwd(p) {
@@ -437,6 +436,7 @@ body { font-family: -apple-system, sans-serif; }
           devices[deviceId].time = time
           devices[deviceId].battery = battery
           var rawTime = data.time || Date.now()
+          devices[deviceId].offline = false
           devices[deviceId].lastSeen = rawTime
           saveLastDataToLocal(deviceId, data.lat, data.lng, time, label, battery, rawTime)
           // Address with geo cache (key = lat,lng ≈10m precision)
@@ -487,7 +487,6 @@ body { font-family: -apple-system, sans-serif; }
         var list = document.getElementById('deviceList')
         var keys = Object.keys(devices)
         if (keys.length === 0) { list.innerHTML = '<div class="empty">输入密码后点击"应用"</div>'; return }
-        checkDeviceOffline()
         list.innerHTML = keys.map(function(id) {
           var d = devices[id]
           var data = d.data || {}
@@ -571,7 +570,7 @@ body { font-family: -apple-system, sans-serif; }
     restoreAllFromLocal()
     // Start offline check every 30s
     if (offlineTimer) clearInterval(offlineTimer)
-    offlineTimer = setInterval(checkDeviceOffline, 30000)
+    offlineTimer = setInterval(function() { checkDeviceOffline(); renderSidebar() }, 30000)
   }
 
   if (document.readyState !== 'loading') init()
