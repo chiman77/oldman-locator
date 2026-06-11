@@ -203,10 +203,10 @@ body { font-family: -apple-system, sans-serif; }
         }
       }
 
-      function saveLastDataToLocal(deviceId, lat, lng, time, label, battery) {
+      function saveLastDataToLocal(deviceId, lat, lng, time, label, battery, lastSeen) {
         try {
           localStorage.setItem('last_' + deviceId, JSON.stringify({
-            lat: lat, lng: lng, time: time, label: label, battery: battery
+            lat: lat, lng: lng, time: time, label: label, battery: battery, lastSeen: lastSeen
           }))
         } catch(e) {}
       }
@@ -223,6 +223,7 @@ body { font-family: -apple-system, sans-serif; }
               devices[deviceId].label = last.label || deviceId
               devices[deviceId].time = last.time || ''
               devices[deviceId].battery = last.battery || '未知'
+              if (last.lastSeen) devices[deviceId].lastSeen = last.lastSeen
             }
           }
           // Restore trail
@@ -347,6 +348,25 @@ body { font-family: -apple-system, sans-serif; }
       var subscribedPasswords = []
       var addressTimers = {}
       var geoCache = {}
+      var offlineThreshold = 30 * 60 * 1000
+      var offlineTimer = null
+
+      function checkDeviceOffline() {
+        var now = Date.now()
+        Object.keys(devices).forEach(function(id) {
+          var d = devices[id]
+          if (!d.lastSeen) { d.offline = false; return }
+          var wasOffline = d.offline
+          d.offline = (now - d.lastSeen > offlineThreshold)
+          if (wasOffline !== d.offline && markers[id]) {
+            try {
+              var el = markers[id].getElement()
+              if (el) el.style.opacity = d.offline ? '0.4' : '1'
+            } catch(e) {}
+          }
+        })
+        renderSidebar()
+      }
 
       function maskPwd(p) {
         return p.length > 3 ? p.slice(0, 3) + '*'.repeat(p.length - 3) : p[0] + '***'
@@ -416,7 +436,9 @@ body { font-family: -apple-system, sans-serif; }
           devices[deviceId].label = label
           devices[deviceId].time = time
           devices[deviceId].battery = battery
-          saveLastDataToLocal(deviceId, data.lat, data.lng, time, label, battery)
+          var rawTime = data.time || Date.now()
+          devices[deviceId].lastSeen = rawTime
+          saveLastDataToLocal(deviceId, data.lat, data.lng, time, label, battery, rawTime)
           // Address with geo cache (key = lat,lng ≈10m precision)
           var geoKey = data.lat.toFixed(4) + ',' + data.lng.toFixed(4)
           if (geoCache[geoKey]) {
@@ -465,6 +487,7 @@ body { font-family: -apple-system, sans-serif; }
         var list = document.getElementById('deviceList')
         var keys = Object.keys(devices)
         if (keys.length === 0) { list.innerHTML = '<div class="empty">输入密码后点击"应用"</div>'; return }
+        checkDeviceOffline()
         list.innerHTML = keys.map(function(id) {
           var d = devices[id]
           var data = d.data || {}
@@ -478,14 +501,23 @@ body { font-family: -apple-system, sans-serif; }
           var detail = trail.length > 0
             ? '<div class="device-detail' + (isOpen ? ' open' : '') + '" id="detail-' + id + '">' + rows + '</div>'
             : '<div class="device-detail' + (isOpen ? ' open' : '') + '" id="detail-' + id + '">暂无轨迹数据</div>'
+          var dotBg = d.offline ? '#bbb' : d.color
+          var nameHtml = d.offline
+            ? d.label + ' <span style="color:#f5222d;font-size:12px">(离线)</span>'
+            : d.label
+          var lastSeenText = ''
+          if (d.offline && d.lastSeen) {
+            var mins = Math.floor((Date.now() - d.lastSeen) / 60000)
+            lastSeenText = '<br>最后上线: ' + mins + '分钟前'
+          }
           return '<div class="device-card" id="card-' + id + '">' +
             '<div class="header" onclick="window._toggleExpand(\''+id+'\')">' +
             '<span class="arrow' + (isOpen ? ' open' : '') + '">&#9654;</span>' +
-            '<span class="dot" style="background:'+d.color+'"></span>' +
-            '<span class="name" onclick="event.stopPropagation();window._focusDevice(\''+id+'\')">'+d.label+'</span>' +
+            '<span class="dot" style="background:'+dotBg+'"></span>' +
+            '<span class="name" onclick="event.stopPropagation();window._focusDevice(\''+id+'\')">'+nameHtml+'</span>' +
             '<span style="float:right;cursor:pointer;font-size:12px;color:'+(d.visible!==false?'#999':'#1677ff')+'" onclick="event.stopPropagation();window._toggleVisibility(\''+id+'\')">'+(d.visible!==false?'隐藏':'显示')+'</span>' +
             '</div>' +
-            '<div class="info">' + (addr ? addr + '<br>' : '') + '纬度: '+(data.lat?data.lat.toFixed(4):'-')+'<br>经度: '+(data.lng?data.lng.toFixed(4):'-')+'<br>电量: '+d.battery+'</div>' +
+            '<div class="info">' + (addr ? addr + '<br>' : '') + '纬度: '+(data.lat?data.lat.toFixed(4):'-')+'<br>经度: '+(data.lng?data.lng.toFixed(4):'-')+'<br>电量: '+d.battery+lastSeenText+'</div>' +
             '<div class="time">'+d.time+'</div>' +
             detail +
             '</div>'
@@ -537,6 +569,9 @@ body { font-family: -apple-system, sans-serif; }
 
     // Restore historical data from localStorage
     restoreAllFromLocal()
+    // Start offline check every 30s
+    if (offlineTimer) clearInterval(offlineTimer)
+    offlineTimer = setInterval(checkDeviceOffline, 30000)
   }
 
   if (document.readyState !== 'loading') init()
