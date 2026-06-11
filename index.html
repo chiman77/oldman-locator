@@ -488,8 +488,10 @@ body { font-family: -apple-system, sans-serif; }
 
       function renderSidebar() {
         var list = document.getElementById('deviceList')
-        var keys = Object.keys(devices)
-        if (keys.length === 0) { list.innerHTML = '<div class="empty">输入密码后点击"应用"</div>'; return }
+        var allKeys = Object.keys(devices)
+        if (allKeys.length === 0) { list.innerHTML = '<div class="empty">输入密码后点击"应用"</div>'; return }
+        var keys = allKeys.filter(function(id) { return devices[id].visible !== false })
+        var hiddenCount = allKeys.length - keys.length
         list.innerHTML = keys.map(function(id) {
           var d = devices[id]
           var data = d.data || {}
@@ -525,12 +527,20 @@ body { font-family: -apple-system, sans-serif; }
             detail +
             '</div>'
         }).join('')
+        if (hiddenCount > 0) {
+          list.innerHTML += '<div style="padding:10px 16px;text-align:center;font-size:13px;color:#999">' + hiddenCount + ' 个设备已隐藏 <a href="#" onclick="window._showAllDevices();return false" style="color:#1677ff">显示全部</a></div>'
+        }
         keys.forEach(function(id) {
           if (devices[id]._expand) {
             var el = document.getElementById('detail-' + id)
             if (el) el.classList.add('open')
           }
         })
+      }
+
+      window._showAllDevices = function() {
+        Object.keys(devices).forEach(function(id) { devices[id].visible = true; syncVisibility(id) })
+        renderSidebar()
       }
 
       window._toggleExpand = function(id) {
