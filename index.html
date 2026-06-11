@@ -501,7 +501,8 @@ body { font-family: -apple-system, sans-serif; }
           var addr = d.address ? d.address : (d.addressLoading ? '查询中...' : '')
           var rows = trail.map(function(p, i) {
             var n = i + 1
-            return '<div class="row"><span class="idx">' + n + '.</span>' + p.time + '<br>' + p.latlng[0].toFixed(4) + ', ' + p.latlng[1].toFixed(4) + '</div>'
+            var clr = (i === trail.length - 1) ? d.color : ''
+            return '<div class="row" style="' + (clr ? 'color:' + clr : '') + '"><span class="idx">' + n + '.</span>' + p.time + '<br>' + p.latlng[0].toFixed(4) + ', ' + p.latlng[1].toFixed(4) + '</div>'
           }).join('')
           var detail = trail.length > 0
             ? '<div class="device-detail' + (isOpen ? ' open' : '') + '" id="detail-' + id + '">' + rows + '</div>'
