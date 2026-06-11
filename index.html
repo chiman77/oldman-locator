@@ -520,7 +520,8 @@ body { font-family: -apple-system, sans-serif; }
             '<span class="arrow' + (isOpen ? ' open' : '') + '">&#9654;</span>' +
             '<span class="dot" style="background:'+dotBg+'"></span>' +
             '<span class="name" onclick="event.stopPropagation();window._focusDevice(\''+id+'\')">'+nameHtml+'</span>' +
-            '<span style="float:right;cursor:pointer;font-size:12px;color:#f5222d;margin-left:12px" onclick="event.stopPropagation();window._deleteDevice(\''+id+'\')">删除</span>' +
+            '<span style="float:right;cursor:pointer;font-size:12px;color:#f5222d" onclick="event.stopPropagation();window._deleteDevice(\''+id+'\')">删除</span>' +
+            '<span style="float:right;color:#d9d9d9;font-size:12px;margin:0 6px">|</span>' +
             '<span style="float:right;cursor:pointer;font-size:12px;color:'+(d.visible!==false?'#999':'#1677ff')+'" onclick="event.stopPropagation();window._toggleVisibility(\''+id+'\')">'+(d.visible!==false?'隐藏':'显示')+'</span>' +
             '</div>' +
             '<div class="info">' + (addr ? addr + '<br>' : '') + '纬度: '+(data.lat?data.lat.toFixed(4):'-')+'<br>经度: '+(data.lng?data.lng.toFixed(4):'-')+'<br>电量: '+d.battery+verText+lastSeenText+'</div>' +
