@@ -199,7 +199,7 @@ body { font-family: -apple-system, sans-serif; }
       function saveTrailToLocal(deviceId) {
         var trail = devices[deviceId] && devices[deviceId]._localTrail
         if (trail && trail.length > 0) {
-          try { localStorage.setItem('trail_' + deviceId, JSON.stringify(trail.slice(-50))) } catch(e) {}
+          try { localStorage.setItem('trail_' + deviceId, JSON.stringify(trail.slice(-30))) } catch(e) {}
         }
       }
 
@@ -232,8 +232,8 @@ body { font-family: -apple-system, sans-serif; }
           var saved = JSON.parse(raw)
           if (!Array.isArray(saved) || saved.length === 0) return
           if (!devices[deviceId]) devices[deviceId] = {}
-          devices[deviceId]._localTrail = saved.slice(-50)
-          devices[deviceId].trail = saved.slice(-20)
+          devices[deviceId]._localTrail = saved.slice(-30)
+          devices[deviceId].trail = saved.slice(-10)
           var trail = devices[deviceId].trail
           if (trail.length < 1) return
           var points = trail.map(function(p) { return p.latlng })
@@ -287,17 +287,17 @@ body { font-family: -apple-system, sans-serif; }
         if (!devices[deviceId]._localTrail) devices[deviceId]._localTrail = []
         if (!devices[deviceId].trail) devices[deviceId].trail = []
 
-        // Full local storage (up to 50)
+        // Full local storage (up to 30)
         devices[deviceId]._localTrail.push({ latlng: latlng, time: time })
-        if (devices[deviceId]._localTrail.length > 50) {
-          devices[deviceId]._localTrail = devices[deviceId]._localTrail.slice(-50)
+        if (devices[deviceId]._localTrail.length > 30) {
+          devices[deviceId]._localTrail = devices[deviceId]._localTrail.slice(-30)
         }
         saveTrailToLocal(deviceId)
 
-        // Display trail (up to 20)
+        // Display trail (up to 10)
         devices[deviceId].trail.push({ latlng: latlng, time: time })
-        if (devices[deviceId].trail.length > 20) {
-          devices[deviceId].trail = devices[deviceId].trail.slice(-20)
+        if (devices[deviceId].trail.length > 10) {
+          devices[deviceId].trail = devices[deviceId].trail.slice(-10)
         }
         var trail = devices[deviceId].trail
         if (trail.length < 2) return
