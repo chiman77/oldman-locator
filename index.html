@@ -39,7 +39,8 @@ body { font-family: -apple-system, sans-serif; }
 .device-card .header .name { flex: 1; }
 .device-detail { font-size: 12px; color: #666; line-height: 1.6; padding: 6px 0 4px 22px; display: none; }
 .device-detail.open { display: block; }
-.device-detail .row { display: flex; gap: 6px; }
+.device-detail .row { display: flex; gap: 6px; border-bottom: 1px dashed #eee; padding-bottom: 6px; margin-bottom: 6px; }
+.device-detail .row:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
 .device-detail .idx { color: #999; min-width: 16px; }
 #diag { position: absolute; bottom: 10px; left: 10px; z-index: 9999; background: rgba(0,0,0,0.8); color: #0f0; padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 12px; line-height: 1.5; max-width: 440px; }
 .trail-tip { background: #fff !important; color: #1677ff !important; border: 1px solid #d9d9d9 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important; font-size: 12px; line-height: 1.4; white-space: nowrap; width: fit-content !important; padding: 2px 6px !important; border-radius: 3px !important; }
