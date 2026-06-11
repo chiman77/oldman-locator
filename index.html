@@ -203,10 +203,10 @@ body { font-family: -apple-system, sans-serif; }
         }
       }
 
-      function saveLastDataToLocal(deviceId, lat, lng, time, label, battery, lastSeen) {
+      function saveLastDataToLocal(deviceId, lat, lng, time, label, battery, lastSeen, version) {
         try {
           localStorage.setItem('last_' + deviceId, JSON.stringify({
-            lat: lat, lng: lng, time: time, label: label, battery: battery, lastSeen: lastSeen
+            lat: lat, lng: lng, time: time, label: label, battery: battery, lastSeen: lastSeen, version: version
           }))
         } catch(e) {}
       }
@@ -224,6 +224,7 @@ body { font-family: -apple-system, sans-serif; }
               devices[deviceId].time = last.time || ''
               devices[deviceId].battery = last.battery || '未知'
               if (last.lastSeen) devices[deviceId].lastSeen = last.lastSeen
+              if (last.version) devices[deviceId].version = last.version
             }
           }
           // Restore trail
@@ -427,18 +428,20 @@ body { font-family: -apple-system, sans-serif; }
           })
 
           var m = L.marker(latlng, { icon: icon })
-          m.bindPopup('<b>'+label+'</b><br>纬度: '+data.lat.toFixed(4)+'<br>经度: '+data.lng.toFixed(4)+'<br>时间: '+time+'<br>电量: '+battery)
+          m.bindPopup('<b>'+label+'</b><br>纬度: '+data.lat.toFixed(4)+'<br>经度: '+data.lng.toFixed(4)+'<br>时间: '+time+'<br>电量: '+battery+(data.version?'<br>版本: '+data.version:''))
           markers[deviceId] = m
           if (devices[deviceId].visible !== false) m.addTo(map)
 
           devices[deviceId].data = data
           devices[deviceId].label = label
           devices[deviceId].time = time
+          var ver = data.version || ''
           devices[deviceId].battery = battery
+          devices[deviceId].version = ver
           var rawTime = data.time || Date.now()
           devices[deviceId].offline = false
           devices[deviceId].lastSeen = rawTime
-          saveLastDataToLocal(deviceId, data.lat, data.lng, time, label, battery, rawTime)
+          saveLastDataToLocal(deviceId, data.lat, data.lng, time, label, battery, rawTime, ver)
           // Address with geo cache (key = lat,lng ≈10m precision)
           var geoKey = data.lat.toFixed(4) + ',' + data.lng.toFixed(4)
           if (geoCache[geoKey]) {
@@ -509,6 +512,7 @@ body { font-family: -apple-system, sans-serif; }
             var mins = Math.floor((Date.now() - d.lastSeen) / 60000)
             lastSeenText = '<br>最后上线: ' + mins + '分钟前'
           }
+          var verText = d.version ? '<br>版本: ' + d.version : ''
           return '<div class="device-card" id="card-' + id + '">' +
             '<div class="header" onclick="window._toggleExpand(\''+id+'\')">' +
             '<span class="arrow' + (isOpen ? ' open' : '') + '">&#9654;</span>' +
@@ -516,7 +520,7 @@ body { font-family: -apple-system, sans-serif; }
             '<span class="name" onclick="event.stopPropagation();window._focusDevice(\''+id+'\')">'+nameHtml+'</span>' +
             '<span style="float:right;cursor:pointer;font-size:12px;color:'+(d.visible!==false?'#999':'#1677ff')+'" onclick="event.stopPropagation();window._toggleVisibility(\''+id+'\')">'+(d.visible!==false?'隐藏':'显示')+'</span>' +
             '</div>' +
-            '<div class="info">' + (addr ? addr + '<br>' : '') + '纬度: '+(data.lat?data.lat.toFixed(4):'-')+'<br>经度: '+(data.lng?data.lng.toFixed(4):'-')+'<br>电量: '+d.battery+lastSeenText+'</div>' +
+            '<div class="info">' + (addr ? addr + '<br>' : '') + '纬度: '+(data.lat?data.lat.toFixed(4):'-')+'<br>经度: '+(data.lng?data.lng.toFixed(4):'-')+'<br>电量: '+d.battery+verText+lastSeenText+'</div>' +
             '<div class="time">'+d.time+'</div>' +
             detail +
             '</div>'
