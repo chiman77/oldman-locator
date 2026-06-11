@@ -521,6 +521,7 @@ body { font-family: -apple-system, sans-serif; }
             '<span class="dot" style="background:'+dotBg+'"></span>' +
             '<span class="name" onclick="event.stopPropagation();window._focusDevice(\''+id+'\')">'+nameHtml+'</span>' +
             '<span style="float:right;cursor:pointer;font-size:12px;color:'+(d.visible!==false?'#999':'#1677ff')+'" onclick="event.stopPropagation();window._toggleVisibility(\''+id+'\')">'+(d.visible!==false?'隐藏':'显示')+'</span>' +
+            '<span style="float:right;cursor:pointer;font-size:12px;color:#f5222d;margin-right:8px" onclick="event.stopPropagation();window._deleteDevice(\''+id+'\')">删除</span>' +
             '</div>' +
             '<div class="info">' + (addr ? addr + '<br>' : '') + '纬度: '+(data.lat?data.lat.toFixed(4):'-')+'<br>经度: '+(data.lng?data.lng.toFixed(4):'-')+'<br>电量: '+d.battery+verText+lastSeenText+'</div>' +
             '<div class="time">'+d.time+'</div>' +
@@ -540,6 +541,17 @@ body { font-family: -apple-system, sans-serif; }
 
       window._showAllDevices = function() {
         Object.keys(devices).forEach(function(id) { devices[id].visible = true; syncVisibility(id) })
+        renderSidebar()
+      }
+
+      window._deleteDevice = function(id) {
+        if (!devices[id]) return
+        if (!confirm('确认删除设备 ' + (devices[id].label || id) + ' 的所有记录？')) return
+        if (trailLayers[id]) { trailLayers[id].forEach(function(l) { map.removeLayer(l) }); delete trailLayers[id] }
+        if (markers[id]) { map.removeLayer(markers[id]); delete markers[id] }
+        try { localStorage.removeItem('trail_' + id) } catch(e) {}
+        try { localStorage.removeItem('last_' + id) } catch(e) {}
+        delete devices[id]
         renderSidebar()
       }
 
