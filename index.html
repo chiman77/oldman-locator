@@ -230,6 +230,12 @@ body { font-family: -apple-system, sans-serif; }
           layers.push(polyline)
         }
         for (var i = 0; i < displayTrail.length; i++) {
+          // Skip last trail point if it overlaps with the main marker
+          if (i === displayTrail.length - 1 && markers[deviceId]) {
+            var mainPos = markers[deviceId].getLatLng()
+            var trailPos = displayTrail[i].latlng
+            if (Math.abs(mainPos.lat - trailPos[0]) < 0.00001 && Math.abs(mainPos.lng - trailPos[1]) < 0.00001) continue
+          }
           var num = i + 1
           var bgColor = (i === displayTrail.length - 1) ? color : '#999'
           var numIcon = L.divIcon({
