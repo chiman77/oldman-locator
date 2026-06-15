@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>老人定位监控</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { font-family: -apple-system, sans-serif; }
+
+/* Leaflet CSS (inlined) */
+.leaflet-container{font-size:12px;line-height:1.5;overflow:hidden;position:relative;height:100%}.leaflet-container{-webkit-tap-highlight-color:transparent;outline:0}.leaflet-pane{position:absolute;left:0;top:0;right:0;bottom:0;z-index:2}.leaflet-tile-pane,.leaflet-overlay-pane,.leaflet-shadow-pane,.leaflet-marker-pane,.leaflet-tooltip-pane,.leaflet-popup-pane{position:absolute;left:0;top:0;right:0;bottom:0}.leaflet-tile{position:absolute;width:256px!important;height:256px!important;pointer-events:none}.leaflet-tile-loaded{visibility:visible!important}.leaflet-tile-pane{z-index:2}.leaflet-map-pane{position:absolute;left:0;top:0;transform:translate(0,0)}.leaflet-zoom-box{position:absolute;left:0;top:0;width:0;height:0;z-index:800;border:2px dotted #38f;background:rgba(255,255,255,.5)}.leaflet-control-zoom{position:relative;z-index:800;pointer-events:auto;-webkit-user-select:none;-moz-user-select:none;user-select:none}.leaflet-control-zoom a{display:block;width:30px;height:30px;line-height:30px;text-align:center;text-decoration:none;background:#fff;color:#333;font-size:18px;font-weight:700;border:2px solid rgba(0,0,0,.2);background-clip:padding-box;cursor:default}.leaflet-control-zoom .leaflet-control-zoom-in{border-radius:4px 4px 0 0}.leaflet-control-zoom .leaflet-control-zoom-out{border-radius:0 0 4px 4px;border-top:none}.leaflet-control-zoom a:hover{background:#f4f4f4}.leaflet-control-attribution{font-size:11px;padding:0 5px;background:rgba(255,255,255,.8);line-height:1.6}.leaflet-control-scale{font-size:11px;padding:0 5px;background:rgba(255,255,255,.8)}.leaflet-popup{position:absolute;text-align:center;margin-bottom:20px}.leaflet-popup-content-wrapper{padding:1px;text-align:left;border-radius:12px;background:#fff;color:#333;box-shadow:0 3px 14px rgba(0,0,0,.4)}.leaflet-popup-content{margin:13px 19px;line-height:1.4;font-size:13px}.leaflet-popup-tip-container{width:40px;height:20px;position:absolute;left:50%;margin-left:-20px;overflow:hidden;pointer-events:none}.leaflet-popup-tip{width:17px;height:17px;padding:1px;margin:-10px auto 0;transform:rotate(45deg);background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.4)}.leaflet-container a.leaflet-popup-close-button{position:absolute;top:0;right:0;padding:4px 4px 0 0;width:18px;height:14px;font:16px/14px Tahoma,Verdana,sans-serif;color:#c3c3c3;text-decoration:none;font-weight:700;background:transparent}.leaflet-div-icon{background:#fff;border:1px solid #666}.leaflet-control{float:left;clear:both}.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}.leaflet-control{clear:both;pointer-events:auto}.leaflet-right .leaflet-control{float:right}.leaflet-top .leaflet-control{margin-top:10px}.leaflet-bottom .leaflet-control{margin-bottom:10px}.leaflet-left .leaflet-control{margin-left:10px}.leaflet-right .leaflet-control{margin-right:10px}.leaflet-fade-anim .leaflet-tile{will-change:opacity}.leaflet-fade-anim .leaflet-popup{opacity:0;-webkit-transition:opacity .2s linear;-moz-transition:opacity .2s linear;transition:opacity .2s linear}.leaflet-fade-anim .leaflet-map-pane .leaflet-popup{opacity:1}.leaflet-zoom-animated{-webkit-transform-origin:0 0;-ms-transform-origin:0 0;transform-origin:0 0}.leaflet-zoom-anim .leaflet-zoom-animated{will-change:transform}.leaflet-zoom-anim .leaflet-zoom-animated{-webkit-transition:-webkit-transform .25s cubic-bezier(0,0,.25,1);-moz-transition:-moz-transform .25s cubic-bezier(0,0,.25,1);transition:transform .25s cubic-bezier(0,0,.25,1)}.leaflet-pan-anim .leaflet-tile,.leaflet-touching .leaflet-zoom-animated{-webkit-transition:none;-moz-transition:none;transition:none}.leaflet-zoom-shadow{-webkit-transition:box-shadow .25s;-moz-transition:box-shadow .25s;transition:box-shadow .25s}.leaflet-control-layers-toggle{background-size:36px 36px}.leaflet-retina .leaflet-control-layers-toggle{background-size:26px 26px}.leaflet-touch .leaflet-control-zoom a{width:44px;height:44px;line-height:44px;font-size:22px}.leaflet-touch .leaflet-control-zoom .leaflet-control-zoom-in{border-radius:8px 8px 0 0}.leaflet-touch .leaflet-control-zoom .leaflet-control-zoom-out{border-radius:0 0 8px 8px}.leaflet-touch .leaflet-control-attribution{font-size:14px}
+/* End Leaflet CSS */
+
+#header {
+  background: #1677ff; color: #fff; padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: absolute; top: 0; left: 0; right: 0; z-index: 1000; height: 52px;
+}
+#header h1 { font-size: 18px; font-weight: 600; }
+#status { font-size: 13px; opacity: 0.9; }
+#map { position: absolute; top: 52px; left: 0; right: 320px; bottom: 0; }
+#sidebar {
+  position: absolute; top: 52px; right: 0; width: 320px; bottom: 0;
+  background: #fff; overflow-y: auto; border-left: 1px solid #e8e8e8;
+}
+.sidebar-title { padding: 14px 16px; font-size: 14px; font-weight: 600; border-bottom: 1px solid #f0f0f0; color: #333; }
+.device-card { padding: 14px 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+.device-card:hover { background: #fafafa; }
+.device-card .name { font-weight: 600; font-size: 15px; color: #1677ff; margin-bottom: 4px; }
+.device-card .info { font-size: 13px; color: #666; line-height: 1.8; }
+.device-card .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.device-card .time { color: #999; font-size: 12px; }
+.empty { padding: 40px 20px; text-align: center; color: #999; font-size: 14px; }
+.device-card .header { display: flex; align-items: center; cursor: pointer; }
+.device-card .arrow { margin-right: 6px; font-size: 10px; color: #999; transition: transform .2s; }
+.device-card .arrow.open { transform: rotate(90deg); }
+.device-card .header .name { flex: 1; }
+.device-detail { font-size: 12px; color: #666; line-height: 1.6; padding: 6px 0 4px 22px; display: none; }
+.device-detail.open { display: block; }
+.device-detail .row { display: flex; gap: 6px; border-bottom: 1px dashed #eee; padding-bottom: 6px; margin-bottom: 6px; }
+.device-detail .row:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+.device-detail .idx { color: #999; min-width: 16px; }
+#diag { position: absolute; bottom: 10px; left: 10px; z-index: 9999; background: rgba(0,0,0,0.8); color: #0f0; padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 12px; line-height: 1.5; max-width: 440px; }
+.trail-tip { background: #fff !important; color: #1677ff !important; border: 1px solid #d9d9d9 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important; font-size: 12px; line-height: 1.4; white-space: nowrap; width: fit-content !important; padding: 2px 6px !important; border-radius: 3px !important; }
+#diag .err { color: #f66; }
+@media (max-width: 768px) {
+  #map { right: 0; bottom: 260px; }
+  #sidebar { top: auto; right: 0; left: 0; bottom: 0; width: 100%; height: 260px; border-left: none; border-top: 1px solid #e8e8e8; }
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>老人定位监控</h1>
+  <span id="status">加载中...</span>
+  <span id="mqttStatus" style="margin-left:12px;font-size:12px;opacity:0.8;color:#ff4d4f">MQTT: 未连接</span>
+</div>
+
+<div id="map"></div>
+
+<div id="sidebar">
+  <div class="sidebar-title">
+    监控密码
+    <span style="float:right;font-size:12px;font-weight:normal;cursor:pointer;color:#1677ff" onclick="window._applyPwd()">应用</span>
+  </div>
+  <div style="padding:10px 16px;border-bottom:1px solid #f0f0f0">
+    <input id="pwdInput" type="text" placeholder="输入密码 (多个用逗号分隔)"
+      style="width:100%;padding:8px 10px;font-size:14px;border:1px solid #d9d9d9;border-radius:4px;box-sizing:border-box"
+      onkeydown="if(event.key==='Enter')window._applyPwd()">
+    <div style="margin-top:6px;font-size:12px;color:#999">
+      已订阅: <span id="pwdStatus">-</span>
+    </div>
+  </div>
+  <div class="sidebar-title">设备列表</div>
+  <div id="deviceList"><div class="empty">输入密码后点击"应用"</div></div>
+</div>
+
+<div id="diag" style="display:none"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
+<script>
+(function() {
+  var statusEl = document.getElementById('status')
+  var mqttStatusEl = document.getElementById('mqttStatus')
+  var mapEl = document.getElementById('map')
+  var diagEl = document.getElementById('diag')
+
+  function log(msg, isErr) {
+    if (isErr) console.error(msg); else console.log(msg)
+  }
+
+  function init() {
+    if (typeof L === 'undefined') {
+      statusEl.textContent = 'Leaflet 加载失败'
+      log('Leaflet not loaded', true)
+      return
+    }
+    log('Leaflet OK')
+
+    // Force-container height
+    mapEl.style.minHeight = '400px'
+
+    var map = L.map('map', {
+      center: [35.86, 104.19],
+      zoom: 4,
+      zoomControl: true
+    })
+
+    // Force proper sizing
+    map.invalidateSize()
+
+    log('Map created')
+
+    var tileSources = [
+      { name: 'OSM',    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subs: 'abc' },
+      { name: 'OSM-DE', url: 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',   subs: 'abc' },
+      { name: 'Google', url: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',subs: '0123' }
+    ]
+
+    var currentSource = 0
+    var currentLayer = null
+    var tileTimer = null
+    var hasGoodTile = false
+
+    function loadNextSource() {
+      if (currentLayer) { map.removeLayer(currentLayer); currentLayer = null }
+      if (currentSource >= tileSources.length) {
+        statusEl.textContent = '全部图源失败'
+        log('All sources failed', true)
+        return
+      }
+      var src = tileSources[currentSource]
+      hasGoodTile = false
+      statusEl.textContent = '图源: ' + src.name
+      log('Trying ' + src.name)
+
+      currentLayer = L.tileLayer(src.url, { maxZoom: 18, subdomains: src.subs })
+
+      var switched = false
+      function doSwitch() {
+        if (switched) return
+        switched = true
+        clearTimeout(tileTimer)
+        currentSource++
+        loadNextSource()
+      }
+
+      tileTimer = setTimeout(function() {
+        if (!hasGoodTile) { log(src.name + ' timeout', true); doSwitch() }
+      }, 6000)
+
+      currentLayer.on('tileload', function() {
+        hasGoodTile = true
+        clearTimeout(tileTimer)
+        log('Tile OK: ' + src.name)
+        statusEl.textContent = '就绪(' + src.name + ')'
+        tileTimer = setTimeout(function() {
+          if (!hasGoodTile) doSwitch()
+        }, 3000)
+      })
+
+      currentLayer.on('tileerror', function(ev) {
+        var u = ev.tile ? ev.tile.src.substring(0, 50) : '?'
+        log('Tile ERR: ' + src.name + ' ' + u, true)
+      })
+
+      currentLayer.addTo(map)
+    }
+
+    loadNextSource()
+
+    // MQTT
+    if (typeof mqtt !== 'undefined') {
+      var client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+        clientId: 'web_' + Math.random().toString(36).substr(2, 8),
+        clean: true,
+        reconnectPeriod: 5000,
+        connectTimeout: 30000
+      })
+
+      var devices = {}
+      var markers = {}
+      var trailLayers = {}
+      var colors = ['#1677ff','#f5222d','#52c41a','#fa8c16','#722ed1','#eb2f96','#13c2c2','#faad14']
+
+      function getColor(id) {
+        if (!devices[id]) devices[id] = {}
+        if (devices[id].visible === undefined) devices[id].visible = true
+        if (!devices[id].color) {
+          var used = []
+          for (var k in devices) { if (devices[k].color) used.push(devices[k].color) }
+          var avail = colors.filter(function(c) { return used.indexOf(c) === -1 })
+          devices[id].color = avail.length > 0 ? avail[0] : colors[Object.keys(devices).length % colors.length]
+        }
+        return devices[id].color
+      }
+
+      function saveTrailToLocal(deviceId) {
+        var trail = devices[deviceId] && devices[deviceId]._localTrail
+        if (trail && trail.length > 0) {
+          try { localStorage.setItem('trail_' + deviceId, JSON.stringify(trail.slice(-30))) } catch(e) {}
+        }
+      }
+
+      function renderTrailOnMap(deviceId) {
+        var trail = devices[deviceId].trail
+        if (!trail || trail.length < 1) return
+        if (trailLayers[deviceId]) {
+          trailLayers[deviceId].forEach(function(l) { map.removeLayer(l) })
+        }
+        var isStationary = false
+        if (trail.length >= 2) {
+          var last = trail[trail.length - 1].latlng
+          var prev = trail[trail.length - 2].latlng
+          var dist = Math.abs(last[0] - prev[0]) + Math.abs(last[1] - prev[1])
+          isStationary = dist < 0.0002
+        }
+        var displayTrail = isStationary ? trail.slice(-3) : trail
+        var points = displayTrail.map(function(p) { return p.latlng })
+        var color = devices[deviceId].color
+        var layers = []
+        if (points.length >= 2) {
+          var polyline = L.polyline(points, {
+            color: color, weight: 2, opacity: 0.6, dashArray: '6,4'
+          }).addTo(map)
+          layers.push(polyline)
+        }
+        for (var i = 0; i < displayTrail.length; i++) {
+          var num = i + 1
+          var bgColor = (i === displayTrail.length - 1) ? color : '#999'
+          var numIcon = L.divIcon({
+            className: '',
+            html: '<div style="background:'+bgColor+';color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;opacity:0.75;border:2px solid #fff">'+num+'</div>',
+            iconSize: [20, 20], iconAnchor: [10, 10]
+          })
+          var mNum = L.marker(displayTrail[i].latlng, { icon: numIcon, interactive: true }).addTo(map)
+          mNum.bindTooltip(deviceId + ' #' + num + '<br>' + displayTrail[i].time, { direction: 'right', offset: L.point(5, 0), className: 'trail-tip' })
+          layers.push(mNum)
+        }
+        trailLayers[deviceId] = layers
+        if (devices[deviceId].visible === false) {
+          layers.forEach(function(l) { map.removeLayer(l) })
+        }
+      }
+
+      function saveLastDataToLocal(deviceId, lat, lng, time, label, battery, lastSeen, version) {
+        try {
+          localStorage.setItem('last_' + deviceId, JSON.stringify({
+            lat: lat, lng: lng, time: time, label: label, battery: battery, lastSeen: lastSeen, version: version
+          }))
+        } catch(e) {}
+      }
+
+      function loadFromLocal(deviceId) {
+        try {
+          // Restore last data point
+          var lastRaw = localStorage.getItem('last_' + deviceId)
+          if (lastRaw) {
+            var last = JSON.parse(lastRaw)
+            if (last.lat && last.lng) {
+              if (!devices[deviceId]) devices[deviceId] = {}
+              devices[deviceId].data = last
+              devices[deviceId].label = last.label || deviceId
+              devices[deviceId].time = last.time || ''
+              devices[deviceId].battery = last.battery || '未知'
+              if (last.lastSeen) devices[deviceId].lastSeen = last.lastSeen
+              if (last.version) devices[deviceId].version = last.version
+            }
+          }
+          // Restore trail
+          var raw = localStorage.getItem('trail_' + deviceId)
+          if (!raw) return
+          var saved = JSON.parse(raw)
+          if (!Array.isArray(saved) || saved.length === 0) return
+          if (!devices[deviceId]) devices[deviceId] = {}
+          devices[deviceId]._localTrail = saved.slice(-30)
+          devices[deviceId].trail = saved.slice(-10)
+          renderTrailOnMap(deviceId)
+        } catch(e) {}
+      }
+
+      function restoreAllFromLocal() {
+        try {
+          for (var i = 0; i < localStorage.length; i++) {
+            var key = localStorage.key(i)
+            if (key && key.indexOf('trail_') === 0) {
+              var deviceId = key.substring(6)
+              loadFromLocal(deviceId)
+              devices[deviceId]._restored = true
+            }
+          }
+          if (Object.keys(devices).length > 0) {
+            renderSidebar()
+            statusEl.textContent = '已恢复 ' + Object.keys(devices).length + ' 个设备的历史记录'
+          }
+        } catch(e) {}
+      }
+
+      function updateTrail(deviceId, latlng, time) {
+        if (!devices[deviceId]) devices[deviceId] = {}
+        if (!devices[deviceId]._localTrail) devices[deviceId]._localTrail = []
+        if (!devices[deviceId].trail) devices[deviceId].trail = []
+
+        // Full local storage (up to 30)
+        devices[deviceId]._localTrail.push({ latlng: latlng, time: time })
+        if (devices[deviceId]._localTrail.length > 30) {
+          devices[deviceId]._localTrail = devices[deviceId]._localTrail.slice(-30)
+        }
+        saveTrailToLocal(deviceId)
+
+        // Display trail (up to 10)
+        devices[deviceId].trail.push({ latlng: latlng, time: time })
+        if (devices[deviceId].trail.length > 10) {
+          devices[deviceId].trail = devices[deviceId].trail.slice(-10)
+        }
+        renderTrailOnMap(deviceId)
+      }
+
+      function syncVisibility(id) {
+        if (trailLayers[id]) trailLayers[id].forEach(function(l) { map.removeLayer(l) })
+        if (markers[id]) map.removeLayer(markers[id])
+        if (devices[id].visible !== false) {
+          if (trailLayers[id]) trailLayers[id].forEach(function(l) { l.addTo(map) })
+          if (markers[id]) markers[id].addTo(map)
+        }
+      }
+
+      window._toggleVisibility = function(id) {
+        if (!devices[id]) return
+        devices[id].visible = !devices[id].visible
+        syncVisibility(id)
+        renderSidebar()
+      }
+
+      var subscribedPasswords = []
+      var addressTimers = {}
+      var geoCache = {}
+      var offlineThreshold = 30 * 60 * 1000
+      var offlineTimer = null
+
+      function checkDeviceOffline() {
+        var now = Date.now()
+        Object.keys(devices).forEach(function(id) {
+          var d = devices[id]
+          if (!d.lastSeen) { d.offline = false; return }
+          var wasOffline = d.offline
+          d.offline = (now - d.lastSeen > offlineThreshold)
+          if (wasOffline !== d.offline && markers[id]) {
+            try {
+              var el = markers[id].getElement()
+              if (el) el.style.opacity = d.offline ? '0.4' : '1'
+            } catch(e) {}
+          }
+        })
+      }
+
+      function maskPwd(p) {
+        return p.length > 3 ? p.slice(0, 3) + '*'.repeat(p.length - 3) : p[0] + '***'
+      }
+
+      function subscribePasswords(pwds) {
+        subscribedPasswords.forEach(function(p) {
+          client.unsubscribe('oldman/pwd/' + p + '/location')
+        })
+        subscribedPasswords = pwds
+        subscribedPasswords.forEach(function(p) {
+          client.subscribe('oldman/pwd/' + p + '/location', { qos: 1 })
+          log('Subscribed to pwd:' + p)
+        })
+        document.getElementById('pwdStatus').textContent = pwds.map(maskPwd).join(', ') || '-'
+        if (pwds.length > 0) mqttStatusEl.textContent = 'MQTT: 已连接 · ' + pwds.map(maskPwd).join(',')
+        try { sessionStorage.setItem('passwords', JSON.stringify(pwds)) } catch(e) {}
+      }
+
+      window._applyPwd = function() {
+        var input = document.getElementById('pwdInput').value.trim()
+        var pwds = input ? input.split(/[,，\s]+/).filter(function(s) { return s.length > 0 }) : []
+        document.getElementById('pwdInput').value = ''
+        if (pwds.length === 0) { document.getElementById('pwdStatus').textContent = '-'; return }
+        if (typeof client !== 'undefined' && client.connected) {
+          subscribePasswords(pwds)
+        } else {
+          log('MQTT not connected', true)
+        }
+      }
+
+      function updateDevice(topic, payload) {
+        try {
+          var data = JSON.parse(payload)
+          if (!data.lat || !data.lng) return
+          var deviceId = data.deviceId || ('dev_' + Math.random().toString(36).substr(2,6))
+          // Restore local trail if first time seeing this device
+          if (!devices[deviceId] || !devices[deviceId]._restored) {
+            if (!devices[deviceId]) devices[deviceId] = {}
+            loadFromLocal(deviceId)
+            devices[deviceId]._restored = true
+          }
+          var color = getColor(deviceId)
+          var latlng = [data.lat, data.lng]
+          var time = new Date(data.time).toLocaleString('zh-CN')
+          var battery = data.battery !== undefined ? data.battery + '%' : '未知'
+          var label = data.deviceId || deviceId
+
+          // Update trail before removing/replacing marker
+          updateTrail(deviceId, latlng, time)
+
+          if (markers[deviceId]) map.removeLayer(markers[deviceId])
+
+          var icon = L.divIcon({
+            className: '',
+            html: '<div style="background:'+color+';color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3)">'+label.charAt(0)+'</div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          })
+
+          var m = L.marker(latlng, { icon: icon })
+          m.bindPopup('<b>'+label+'</b><br>纬度: '+data.lat.toFixed(4)+'<br>经度: '+data.lng.toFixed(4)+'<br>时间: '+time+'<br>电量: '+battery+(data.version?'<br>版本: '+data.version:''))
+          markers[deviceId] = m
+          if (devices[deviceId].visible !== false) m.addTo(map)
+
+          devices[deviceId].data = data
+          devices[deviceId].label = label
+          devices[deviceId].time = time
+          var ver = data.version || ''
+          devices[deviceId].battery = battery
+          devices[deviceId].version = ver
+          var rawTime = data.time || Date.now()
+          devices[deviceId].offline = false
+          devices[deviceId].lastSeen = rawTime
+          saveLastDataToLocal(deviceId, data.lat, data.lng, time, label, battery, rawTime, ver)
+          // Address with geo cache (key = lat,lng ≈10m precision)
+          var geoKey = data.lat.toFixed(4) + ',' + data.lng.toFixed(4)
+          if (geoCache[geoKey]) {
+            devices[deviceId].address = geoCache[geoKey]
+            devices[deviceId].addressLoading = false
+          } else {
+            devices[deviceId].address = ''
+            devices[deviceId].addressLoading = true
+            if (addressTimers[deviceId]) clearTimeout(addressTimers[deviceId])
+            addressTimers[deviceId] = setTimeout(function() {
+              var url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + data.lat + '&lon=' + data.lng + '&zoom=16&accept-language=zh'
+              fetch(url, { headers: { 'User-Agent': 'OldmanLocator/1.0' } })
+                .then(function(r) { return r.json() })
+                .then(function(j) {
+                  if (j.display_name) {
+                    var parts = j.display_name.split(',')
+                    var addr = parts.slice(0, 3).map(function(s){return s.trim()}).join(',')
+                    geoCache[geoKey] = addr
+                    devices[deviceId].address = addr
+                  }
+                  devices[deviceId].addressLoading = false
+                  renderSidebar()
+                })
+                .catch(function() {
+                  devices[deviceId].addressLoading = false
+                })
+            }, 200)
+          }
+
+          var all = []
+          for (var k in markers) {
+            if (devices[k] && devices[k].visible !== false) all.push(markers[k])
+          }
+          if (all.length > 0) {
+            var group = L.featureGroup(all)
+            map.fitBounds(group.getBounds().pad(0.1), { maxZoom: 14 })
+          }
+          renderSidebar()
+          mqttStatusEl.textContent = 'MQTT: 已连接 · ' + Object.keys(devices).length + ' 个设备'
+        } catch(e) {
+          log('Parse err: ' + e.message, true)
+        }
+      }
+
+      function renderSidebar() {
+        var list = document.getElementById('deviceList')
+        var allKeys = Object.keys(devices)
+        if (allKeys.length === 0) { list.innerHTML = '<div class="empty">输入密码后点击"应用"</div>'; return }
+        var keys = allKeys.filter(function(id) { return devices[id].visible !== false })
+        var hiddenCount = allKeys.length - keys.length
+        list.innerHTML = keys.map(function(id) {
+          var d = devices[id]
+          var data = d.data || {}
+          var trail = d._localTrail || d.trail || []
+          var isOpen = d._expand || false
+          var addr = d.address ? d.address : (d.addressLoading ? '查询中...' : '')
+          var rows = trail.map(function(p, i) {
+            var n = i + 1
+            var clr = (i === trail.length - 1) ? d.color : ''
+            return '<div class="row" style="' + (clr ? 'color:' + clr : '') + '"><span class="idx">' + n + '.</span>' + p.time + '<br>' + p.latlng[0].toFixed(4) + ', ' + p.latlng[1].toFixed(4) + '</div>'
+          }).join('')
+          var detail = trail.length > 0
+            ? '<div class="device-detail' + (isOpen ? ' open' : '') + '" id="detail-' + id + '">' + rows + '</div>'
+            : '<div class="device-detail' + (isOpen ? ' open' : '') + '" id="detail-' + id + '">暂无轨迹数据</div>'
+          var dotBg = d.offline ? '#bbb' : d.color
+          var nameHtml = d.offline
+            ? d.label + ' <span style="color:#f5222d;font-size:12px">(离线)</span>'
+            : d.label
+          var lastSeenText = ''
+          if (d.offline && d.lastSeen) {
+            var mins = Math.floor((Date.now() - d.lastSeen) / 60000)
+            lastSeenText = '<br>最后上线: ' + mins + '分钟前'
+          }
+          var verText = d.version ? '<br>版本: ' + d.version : ''
+          return '<div class="device-card" id="card-' + id + '">' +
+            '<div class="header" onclick="window._toggleExpand(\''+id+'\')">' +
+            '<span class="arrow' + (isOpen ? ' open' : '') + '">&#9654;</span>' +
+            '<span class="dot" style="background:'+dotBg+'"></span>' +
+            '<span class="name" onclick="event.stopPropagation();window._focusDevice(\''+id+'\')">'+nameHtml+'</span>' +
+            '<span style="float:right;cursor:pointer;font-size:12px;color:#f5222d" onclick="event.stopPropagation();window._deleteDevice(\''+id+'\')">删除</span>' +
+            '<span style="float:right;color:#d9d9d9;font-size:12px;margin:0 6px">|</span>' +
+            '<span style="float:right;cursor:pointer;font-size:12px;color:'+(d.visible!==false?'#999':'#1677ff')+'" onclick="event.stopPropagation();window._toggleVisibility(\''+id+'\')">'+(d.visible!==false?'隐藏':'显示')+'</span>' +
+            '</div>' +
+            '<div class="info">' + (addr ? addr + '<br>' : '') + '纬度: '+(data.lat?data.lat.toFixed(4):'-')+'<br>经度: '+(data.lng?data.lng.toFixed(4):'-')+'<br>电量: '+d.battery+verText+lastSeenText+'</div>' +
+            '<div class="time">'+d.time+'</div>' +
+            detail +
+            '</div>'
+        }).join('')
+        if (hiddenCount > 0) {
+          list.innerHTML += '<div style="padding:10px 16px;text-align:center;font-size:13px;color:#999">' + hiddenCount + ' 个设备已隐藏 <a href="#" onclick="window._showAllDevices();return false" style="color:#1677ff">显示全部</a></div>'
+        }
+        keys.forEach(function(id) {
+          if (devices[id]._expand) {
+            var el = document.getElementById('detail-' + id)
+            if (el) el.classList.add('open')
+          }
+        })
+      }
+
+      window._showAllDevices = function() {
+        Object.keys(devices).forEach(function(id) { devices[id].visible = true; syncVisibility(id) })
+        renderSidebar()
+      }
+
+      window._deleteDevice = function(id) {
+        if (!devices[id]) return
+        if (!confirm('确认删除设备 ' + (devices[id].label || id) + ' 的所有记录？')) return
+        if (trailLayers[id]) { trailLayers[id].forEach(function(l) { map.removeLayer(l) }); delete trailLayers[id] }
+        if (markers[id]) { map.removeLayer(markers[id]); delete markers[id] }
+        try { localStorage.removeItem('trail_' + id) } catch(e) {}
+        try { localStorage.removeItem('last_' + id) } catch(e) {}
+        delete devices[id]
+        renderSidebar()
+      }
+
+      window._toggleExpand = function(id) {
+        devices[id]._expand = !devices[id]._expand
+        renderSidebar()
+        var card = document.getElementById('card-' + id)
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+
+      window._focusDevice = function(id) {
+        if (!devices[id]) return
+        if (devices[id].visible === false) {
+          devices[id].visible = true
+          syncVisibility(id)
+          renderSidebar()
+        }
+        if (markers[id]) { map.setView(markers[id].getLatLng(), 15); markers[id].openPopup() }
+      }
+
+      client.on('connect', function() {
+        mqttStatusEl.textContent = 'MQTT: 已连接'
+        mqttStatusEl.style.color = '#52c41a'
+        log('MQTT connected')
+        var pwds = subscribedPasswords
+        if (pwds.length === 0) {
+          try {
+            var saved = sessionStorage.getItem('passwords')
+            if (saved) { pwds = JSON.parse(saved); subscribedPasswords = pwds }
+          } catch(e) {}
+        }
+        if (pwds.length > 0) subscribePasswords(pwds)
+      })
+      client.on('message', function(topic, msg) { updateDevice(topic, msg.toString()) })
+      client.on('reconnect', function() { mqttStatusEl.textContent = 'MQTT: 重连中...'; mqttStatusEl.style.color = '#faad14' })
+      client.on('close', function() { mqttStatusEl.textContent = 'MQTT: 断开'; mqttStatusEl.style.color = '#ff4d4f' })
+      client.on('error', function(e) { log('MQTT err: ' + (e.message||'?'), true) })
+    } else {
+      log('MQTT not loaded', true)
+    }
+
+    // Restore historical data from localStorage
+    restoreAllFromLocal()
+    // Start offline check every 30s
+    if (offlineTimer) clearInterval(offlineTimer)
+    offlineTimer = setInterval(function() { checkDeviceOffline(); renderSidebar() }, 30000)
+    // MQTT subscription health check every 30s
+    setInterval(function() {
+      if (typeof client !== 'undefined' && client.connected) {
+        mqttStatusEl.textContent = 'MQTT: 已连接'
+        mqttStatusEl.style.color = '#52c41a'
+        if (subscribedPasswords.length > 0) {
+          subscribePasswords(subscribedPasswords)
+        }
+      } else {
+        mqttStatusEl.textContent = 'MQTT: 断开'
+        mqttStatusEl.style.color = '#ff4d4f'
+      }
+    }, 30000)
+  }
+
+  if (document.readyState !== 'loading') init()
+  else document.addEventListener('DOMContentLoaded', init)
+})()
+</script>
+</body>
+</html>
