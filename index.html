@@ -488,6 +488,7 @@ body { font-family: -apple-system, sans-serif; }
         var allKeys = Object.keys(devices)
         if (allKeys.length === 0) { list.innerHTML = '<div class="empty">输入密码后点击"应用"</div>'; return }
         var keys = allKeys.filter(function(id) { return devices[id].visible !== false })
+          .sort(function(a, b) { return (devices[b].lastSeen || 0) - (devices[a].lastSeen || 0) })
         var hiddenCount = allKeys.length - keys.length
         list.innerHTML = keys.map(function(id) {
           var d = devices[id]
