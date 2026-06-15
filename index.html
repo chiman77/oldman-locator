@@ -283,6 +283,7 @@ body { font-family: -apple-system, sans-serif; }
           var saved = JSON.parse(raw)
           if (!Array.isArray(saved) || saved.length === 0) return
           if (!devices[deviceId]) devices[deviceId] = {}
+          if (devices[deviceId].visible === undefined) devices[deviceId].visible = true
           devices[deviceId]._localTrail = saved.slice(-30)
           devices[deviceId].trail = saved.slice(-10)
           renderTrailOnMap(deviceId)
