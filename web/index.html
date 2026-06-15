@@ -399,6 +399,14 @@ body { font-family: -apple-system, sans-serif; }
             loadFromLocal(deviceId)
             devices[deviceId]._restored = true
           }
+
+          // Old report from batch resend: only update trail, skip marker/geocoding/sidebar
+          var rawTime = data.time || Date.now()
+          if (devices[deviceId].lastSeen && rawTime < devices[deviceId].lastSeen) {
+            updateTrail(deviceId, [data.lat, data.lng], new Date(data.time).toLocaleString('zh-CN'))
+            return
+          }
+
           var color = getColor(deviceId)
           var latlng = [data.lat, data.lng]
           var time = new Date(data.time).toLocaleString('zh-CN')
@@ -428,7 +436,6 @@ body { font-family: -apple-system, sans-serif; }
           var ver = data.version || ''
           devices[deviceId].battery = battery
           devices[deviceId].version = ver
-          var rawTime = data.time || Date.now()
           devices[deviceId].offline = false
           devices[deviceId].lastSeen = rawTime
           saveLastDataToLocal(deviceId, data.lat, data.lng, time, label, battery, rawTime, ver)
