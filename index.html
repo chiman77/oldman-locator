@@ -56,6 +56,7 @@ body { font-family: -apple-system, sans-serif; }
 <div id="header">
   <h1>老人定位监控</h1>
   <span id="status">加载中...</span>
+  <span id="mqttStatus" style="margin-left:12px;font-size:12px;opacity:0.8;color:#ff4d4f">MQTT: 未连接</span>
 </div>
 
 <div id="map"></div>
@@ -84,6 +85,7 @@ body { font-family: -apple-system, sans-serif; }
 <script>
 (function() {
   var statusEl = document.getElementById('status')
+  var mqttStatusEl = document.getElementById('mqttStatus')
   var mapEl = document.getElementById('map')
   var diagEl = document.getElementById('diag')
 
@@ -370,7 +372,7 @@ body { font-family: -apple-system, sans-serif; }
           log('Subscribed to pwd:' + p)
         })
         document.getElementById('pwdStatus').textContent = pwds.map(maskPwd).join(', ') || '-'
-        if (pwds.length > 0) statusEl.textContent = '已连接 · ' + pwds.map(maskPwd).join(',')
+        if (pwds.length > 0) mqttStatusEl.textContent = 'MQTT: 已连接 · ' + pwds.map(maskPwd).join(',')
         try { sessionStorage.setItem('passwords', JSON.stringify(pwds)) } catch(e) {}
       }
 
@@ -468,7 +470,7 @@ body { font-family: -apple-system, sans-serif; }
             map.fitBounds(group.getBounds().pad(0.1), { maxZoom: 14 })
           }
           renderSidebar()
-          statusEl.textContent = '已连接 · ' + Object.keys(devices).length + ' 个设备'
+          mqttStatusEl.textContent = 'MQTT: 已连接 · ' + Object.keys(devices).length + ' 个设备'
         } catch(e) {
           log('Parse err: ' + e.message, true)
         }
@@ -563,7 +565,8 @@ body { font-family: -apple-system, sans-serif; }
       }
 
       client.on('connect', function() {
-        statusEl.textContent = 'MQTT已连接'
+        mqttStatusEl.textContent = 'MQTT: 已连接'
+        mqttStatusEl.style.color = '#52c41a'
         log('MQTT connected')
         var pwds = subscribedPasswords
         if (pwds.length === 0) {
@@ -575,8 +578,8 @@ body { font-family: -apple-system, sans-serif; }
         if (pwds.length > 0) subscribePasswords(pwds)
       })
       client.on('message', function(topic, msg) { updateDevice(topic, msg.toString()) })
-      client.on('reconnect', function() { statusEl.textContent = '重连中...' })
-      client.on('close', function() { statusEl.textContent = '连接断开' })
+      client.on('reconnect', function() { mqttStatusEl.textContent = 'MQTT: 重连中...'; mqttStatusEl.style.color = '#faad14' })
+      client.on('close', function() { mqttStatusEl.textContent = 'MQTT: 断开'; mqttStatusEl.style.color = '#ff4d4f' })
       client.on('error', function(e) { log('MQTT err: ' + (e.message||'?'), true) })
     } else {
       log('MQTT not loaded', true)
@@ -587,6 +590,19 @@ body { font-family: -apple-system, sans-serif; }
     // Start offline check every 30s
     if (offlineTimer) clearInterval(offlineTimer)
     offlineTimer = setInterval(function() { checkDeviceOffline(); renderSidebar() }, 30000)
+    // MQTT subscription health check every 30s
+    setInterval(function() {
+      if (typeof client !== 'undefined' && client.connected) {
+        mqttStatusEl.textContent = 'MQTT: 已连接'
+        mqttStatusEl.style.color = '#52c41a'
+        if (subscribedPasswords.length > 0) {
+          subscribePasswords(subscribedPasswords)
+        }
+      } else {
+        mqttStatusEl.textContent = 'MQTT: 断开'
+        mqttStatusEl.style.color = '#ff4d4f'
+      }
+    }, 30000)
   }
 
   if (document.readyState !== 'loading') init()
