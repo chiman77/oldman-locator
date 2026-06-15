@@ -227,11 +227,12 @@ body { font-family: -apple-system, sans-serif; }
           }).addTo(map)
           layers.push(polyline)
         }
-        for (var i = 0; i < displayTrail.length - 1; i++) {
+        for (var i = 0; i < displayTrail.length; i++) {
           var num = i + 1
+          var bgColor = (i === displayTrail.length - 1) ? color : '#999'
           var numIcon = L.divIcon({
             className: '',
-            html: '<div style="background:#999;color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;opacity:0.75;border:2px solid #fff">'+num+'</div>',
+            html: '<div style="background:'+bgColor+';color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;opacity:0.75;border:2px solid #fff">'+num+'</div>',
             iconSize: [20, 20], iconAnchor: [10, 10]
           })
           var mNum = L.marker(displayTrail[i].latlng, { icon: numIcon, interactive: true }).addTo(map)
