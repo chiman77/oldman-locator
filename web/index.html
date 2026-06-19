@@ -88,12 +88,15 @@ body { font-family: -apple-system, sans-serif; }
   var mqttStatusEl = document.getElementById('mqttStatus')
   var mapEl = document.getElementById('map')
   var diagEl = document.getElementById('diag')
+  var initialized = false
 
   function log(msg, isErr) {
     if (isErr) console.error(msg); else console.log(msg)
   }
 
   function init() {
+    if (initialized) return
+    initialized = true
     if (typeof L === 'undefined') {
       statusEl.textContent = 'Leaflet 加载失败'
       log('Leaflet not loaded', true)
@@ -114,6 +117,9 @@ body { font-family: -apple-system, sans-serif; }
     map.invalidateSize()
 
     log('Map created')
+
+    var hasUserPanned = false
+    map.on('movestart', function() { hasUserPanned = true })
 
     var tileSources = [
       { name: 'OSM',    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subs: 'abc' },
@@ -179,7 +185,8 @@ body { font-family: -apple-system, sans-serif; }
         clientId: 'web_' + Math.random().toString(36).substr(2, 8),
         clean: true,
         reconnectPeriod: 5000,
-        connectTimeout: 30000
+        connectTimeout: 10000,
+        keepalive: 30
       })
 
       var devices = {}
@@ -268,6 +275,12 @@ body { font-family: -apple-system, sans-serif; }
               devices[deviceId].battery = last.battery || '未知'
               if (last.lastSeen) devices[deviceId].lastSeen = last.lastSeen
               if (last.version) devices[deviceId].version = last.version
+              devices[deviceId]._synced = false
+              // Mark offline immediately if last seen > 30 min ago
+              if (last.lastSeen && (Date.now() - last.lastSeen > offlineThreshold)) {
+                devices[deviceId].offline = true
+                devices[deviceId]._synced = true
+              }
             }
           }
           // Restore trail
@@ -304,18 +317,29 @@ body { font-family: -apple-system, sans-serif; }
         if (!devices[deviceId]) devices[deviceId] = {}
         if (!devices[deviceId]._localTrail) devices[deviceId]._localTrail = []
         if (!devices[deviceId].trail) devices[deviceId].trail = []
+        var ts = new Date(time).getTime()
 
-        // Full local storage (up to 30)
-        devices[deviceId]._localTrail.push({ latlng: latlng, time: time })
-        if (devices[deviceId]._localTrail.length > 30) {
-          devices[deviceId]._localTrail = devices[deviceId]._localTrail.slice(-30)
+        // Insert chronologically into local trail
+        var localTrail = devices[deviceId]._localTrail
+        var insertIdx = localTrail.length
+        for (var i = localTrail.length - 1; i >= 0; i--) {
+          if (new Date(localTrail[i].time).getTime() <= ts) { insertIdx = i + 1; break }
+        }
+        localTrail.splice(insertIdx, 0, { latlng: latlng, time: time })
+        if (localTrail.length > 30) {
+          devices[deviceId]._localTrail = localTrail.slice(-30)
         }
         saveTrailToLocal(deviceId)
 
-        // Display trail (up to 10)
-        devices[deviceId].trail.push({ latlng: latlng, time: time })
-        if (devices[deviceId].trail.length > 10) {
-          devices[deviceId].trail = devices[deviceId].trail.slice(-10)
+        // Display trail (up to 10, chronological)
+        var trail = devices[deviceId].trail
+        var insertIdx2 = trail.length
+        for (var j = trail.length - 1; j >= 0; j--) {
+          if (new Date(trail[j].time).getTime() <= ts) { insertIdx2 = j + 1; break }
+        }
+        trail.splice(insertIdx2, 0, { latlng: latlng, time: time })
+        if (trail.length > 10) {
+          devices[deviceId].trail = trail.slice(-10)
         }
         renderTrailOnMap(deviceId)
       }
@@ -341,12 +365,15 @@ body { font-family: -apple-system, sans-serif; }
       var geoCache = {}
       var offlineThreshold = 30 * 60 * 1000
       var offlineTimer = null
+      var healthCheckTimer = null
+      var lastMessageTime = Date.now()
 
       function checkDeviceOffline() {
         var now = Date.now()
         Object.keys(devices).forEach(function(id) {
           var d = devices[id]
           if (!d.lastSeen) { d.offline = false; return }
+          if (d._synced === false) return
           var wasOffline = d.offline
           d.offline = (now - d.lastSeen > offlineThreshold)
           if (wasOffline !== d.offline && markers[id]) {
@@ -363,35 +390,41 @@ body { font-family: -apple-system, sans-serif; }
       }
 
       function subscribePasswords(pwds) {
+        // Unsubscribe only old passwords that are not in the new list
         subscribedPasswords.forEach(function(p) {
-          client.unsubscribe('oldman/pwd/' + p + '/location')
+          if (pwds.indexOf(p) === -1) client.unsubscribe('oldman/pwd/' + p + '/location')
         })
         subscribedPasswords = pwds
-        subscribedPasswords.forEach(function(p) {
+        pwds.forEach(function(p) {
           client.subscribe('oldman/pwd/' + p + '/location', { qos: 1 })
           log('Subscribed to pwd:' + p)
         })
         document.getElementById('pwdStatus').textContent = pwds.map(maskPwd).join(', ') || '-'
         if (pwds.length > 0) mqttStatusEl.textContent = 'MQTT: 已连接 · ' + pwds.map(maskPwd).join(',')
         try { sessionStorage.setItem('passwords', JSON.stringify(pwds)) } catch(e) {}
+        try { localStorage.setItem('passwords', JSON.stringify(pwds)) } catch(e) {}
       }
 
       window._applyPwd = function() {
         var input = document.getElementById('pwdInput').value.trim()
         var pwds = input ? input.split(/[,，\s]+/).filter(function(s) { return s.length > 0 }) : []
         document.getElementById('pwdInput').value = ''
-        if (pwds.length === 0) { document.getElementById('pwdStatus').textContent = '-'; return }
+        if (pwds.length === 0) { document.getElementById('pwdStatus').textContent = '-'; subscribedPasswords = []; return }
+        try { sessionStorage.setItem('passwords', JSON.stringify(pwds)) } catch(e) {}
+        try { localStorage.setItem('passwords', JSON.stringify(pwds)) } catch(e) {}
+        document.getElementById('pwdStatus').textContent = pwds.map(maskPwd).join(', ') || '-'
         if (typeof client !== 'undefined' && client.connected) {
           subscribePasswords(pwds)
         } else {
-          log('MQTT not connected', true)
+          subscribedPasswords = pwds
+          log('MQTT not connected, will subscribe on connect')
         }
       }
 
       function updateDevice(topic, payload) {
         try {
           var data = JSON.parse(payload)
-          if (!data.lat || !data.lng) return
+          if (data.lat === undefined || data.lng === undefined || data.lat === null || data.lng === null) return
           var deviceId = data.deviceId || ('dev_' + Math.random().toString(36).substr(2,6))
           // Restore local trail if first time seeing this device
           if (!devices[deviceId] || !devices[deviceId]._restored) {
@@ -416,19 +449,21 @@ body { font-family: -apple-system, sans-serif; }
           // Update trail before removing/replacing marker
           updateTrail(deviceId, latlng, time)
 
-          if (markers[deviceId]) map.removeLayer(markers[deviceId])
-
-          var icon = L.divIcon({
-            className: '',
-            html: '<div style="background:'+color+';color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3)">'+label.charAt(0)+'</div>',
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-          })
-
-          var m = L.marker(latlng, { icon: icon })
-          m.bindPopup('<b>'+label+'</b><br>纬度: '+data.lat.toFixed(4)+'<br>经度: '+data.lng.toFixed(4)+'<br>时间: '+time+'<br>电量: '+battery+(data.version?'<br>版本: '+data.version:''))
-          markers[deviceId] = m
-          if (devices[deviceId].visible !== false) m.addTo(map)
+          if (markers[deviceId]) {
+            markers[deviceId].setLatLng(latlng)
+            markers[deviceId].setPopupContent('<b>'+label+'</b><br>纬度: '+data.lat.toFixed(4)+'<br>经度: '+data.lng.toFixed(4)+'<br>时间: '+time+'<br>电量: '+battery+(data.version?'<br>版本: '+data.version:''))
+          } else {
+            var icon = L.divIcon({
+              className: '',
+              html: '<div style="background:'+color+';color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3)">'+label.charAt(0)+'</div>',
+              iconSize: [20, 20],
+              iconAnchor: [10, 10]
+            })
+            var m = L.marker(latlng, { icon: icon })
+            m.bindPopup('<b>'+label+'</b><br>纬度: '+data.lat.toFixed(4)+'<br>经度: '+data.lng.toFixed(4)+'<br>时间: '+time+'<br>电量: '+battery+(data.version?'<br>版本: '+data.version:''))
+            markers[deviceId] = m
+            if (devices[deviceId].visible !== false) m.addTo(map)
+          }
 
           devices[deviceId].data = data
           devices[deviceId].label = label
@@ -437,6 +472,7 @@ body { font-family: -apple-system, sans-serif; }
           devices[deviceId].battery = battery
           devices[deviceId].version = ver
           devices[deviceId].offline = false
+          devices[deviceId]._synced = true
           devices[deviceId].lastSeen = rawTime
           saveLastDataToLocal(deviceId, data.lat, data.lng, time, label, battery, rawTime, ver)
           // Address with geo cache (key = lat,lng ≈10m precision)
@@ -468,13 +504,15 @@ body { font-family: -apple-system, sans-serif; }
             }, 200)
           }
 
-          var all = []
-          for (var k in markers) {
-            if (devices[k] && devices[k].visible !== false) all.push(markers[k])
-          }
-          if (all.length > 0) {
-            var group = L.featureGroup(all)
-            map.fitBounds(group.getBounds().pad(0.1), { maxZoom: 14 })
+          if (!hasUserPanned) {
+            var all = []
+            for (var k in markers) {
+              if (devices[k] && devices[k].visible !== false) all.push(markers[k])
+            }
+            if (all.length > 0) {
+              var group = L.featureGroup(all)
+              map.fitBounds(group.getBounds().pad(0.1), { maxZoom: 14 })
+            }
           }
           renderSidebar()
           mqttStatusEl.textContent = 'MQTT: 已连接 · ' + Object.keys(devices).length + ' 个设备'
@@ -549,6 +587,7 @@ body { font-family: -apple-system, sans-serif; }
         if (!confirm('确认删除设备 ' + (devices[id].label || id) + ' 的所有记录？')) return
         if (trailLayers[id]) { trailLayers[id].forEach(function(l) { map.removeLayer(l) }); delete trailLayers[id] }
         if (markers[id]) { map.removeLayer(markers[id]); delete markers[id] }
+        if (addressTimers[id]) { clearTimeout(addressTimers[id]); delete addressTimers[id] }
         try { localStorage.removeItem('trail_' + id) } catch(e) {}
         try { localStorage.removeItem('last_' + id) } catch(e) {}
         delete devices[id]
@@ -556,6 +595,7 @@ body { font-family: -apple-system, sans-serif; }
       }
 
       window._toggleExpand = function(id) {
+        if (!devices[id]) return
         devices[id]._expand = !devices[id]._expand
         renderSidebar()
         var card = document.getElementById('card-' + id)
@@ -576,16 +616,22 @@ body { font-family: -apple-system, sans-serif; }
         mqttStatusEl.textContent = 'MQTT: 已连接'
         mqttStatusEl.style.color = '#52c41a'
         log('MQTT connected')
+        lastMessageTime = Date.now()
         var pwds = subscribedPasswords
         if (pwds.length === 0) {
           try {
-            var saved = sessionStorage.getItem('passwords')
+            var saved = sessionStorage.getItem('passwords') || localStorage.getItem('passwords')
             if (saved) { pwds = JSON.parse(saved); subscribedPasswords = pwds }
           } catch(e) {}
         }
-        if (pwds.length > 0) subscribePasswords(pwds)
+        if (pwds.length > 0) {
+          setTimeout(function() { subscribePasswords(pwds) }, 500)
+        }
       })
-      client.on('message', function(topic, msg) { updateDevice(topic, msg.toString()) })
+      client.on('message', function(topic, msg) {
+        lastMessageTime = Date.now()
+        updateDevice(topic, msg.toString())
+      })
       client.on('reconnect', function() { mqttStatusEl.textContent = 'MQTT: 重连中...'; mqttStatusEl.style.color = '#faad14' })
       client.on('close', function() { mqttStatusEl.textContent = 'MQTT: 断开'; mqttStatusEl.style.color = '#ff4d4f' })
       client.on('error', function(e) { log('MQTT err: ' + (e.message||'?'), true) })
@@ -598,19 +644,36 @@ body { font-family: -apple-system, sans-serif; }
     // Start offline check every 30s
     if (offlineTimer) clearInterval(offlineTimer)
     offlineTimer = setInterval(function() { checkDeviceOffline(); renderSidebar() }, 30000)
-    // MQTT subscription health check every 30s
-    setInterval(function() {
+    // MQTT health check + force reconnect every 60s
+    if (healthCheckTimer) clearInterval(healthCheckTimer)
+    healthCheckTimer = setInterval(function() {
       if (typeof client !== 'undefined' && client.connected) {
         mqttStatusEl.textContent = 'MQTT: 已连接'
         mqttStatusEl.style.color = '#52c41a'
-        if (subscribedPasswords.length > 0) {
-          subscribePasswords(subscribedPasswords)
+        // Force reconnect if no message for 3 minutes (zombie connection detection)
+        if (lastMessageTime > 0 && Date.now() - lastMessageTime > 3 * 60 * 1000) {
+          log('No MQTT message for 3min, force reconnect')
+          mqttStatusEl.textContent = 'MQTT: 重连中...'
+          mqttStatusEl.style.color = '#faad14'
+          try { client.end(true) } catch(e) { try { client.stream.destroy() } catch(e2) {} }
+          lastMessageTime = Date.now()
         }
       } else {
         mqttStatusEl.textContent = 'MQTT: 断开'
         mqttStatusEl.style.color = '#ff4d4f'
       }
-    }, 30000)
+    }, 60000)
+    // Refresh when tab becomes visible
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) {
+        checkDeviceOffline()
+        renderSidebar()
+        if (typeof client !== 'undefined' && client.connected) {
+          mqttStatusEl.textContent = 'MQTT: 已连接'
+          mqttStatusEl.style.color = '#52c41a'
+        }
+      }
+    })
   }
 
   if (document.readyState !== 'loading') init()

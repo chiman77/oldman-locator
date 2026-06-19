@@ -1,0 +1,8 @@
+android/app/build/
+android/build/
+.gradle/
+*.apk
+android/local.properties
+android/.idea/
+android/.gradle/
+backup/

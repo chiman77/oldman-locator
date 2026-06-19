@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -16,18 +17,21 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import org.json.JSONObject
+import java.util.concurrent.Executors
 
 class LocationService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
+    private val executor = Executors.newSingleThreadExecutor()
     private var mqttManager: MqttManager? = null
     private var locationManager: LocationManager? = null
     private var deviceId = "unknown"
     private var password = ""
-    private var isRunning = false
+    @Volatile private var isRunning = false
     private var reportInterval = 5 * 60 * 1000L
 
     private var mqttStatus = "连接中..."
@@ -53,15 +57,22 @@ class LocationService : Service() {
                 Log.w(TAG, "Health check: MQTT not connected, reconnecting")
                 mqttStatus = "MQTT重连中..."
                 updateNotification()
-                mqttManager?.connect()
+                connect()
+            }
+            // Write heartbeat
+            if (isRunning) {
+                getSharedPreferences("prefs", MODE_PRIVATE).edit()
+                    .putLong("service_heartbeat", System.currentTimeMillis()).apply()
             }
             handler.postDelayed(this, 60000)
         }
     }
 
+    private val reconnectTask = Runnable { connect() }
+
     override fun onCreate() {
         super.onCreate()
-        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        locationManager = getSystemService(LOCATION_SERVICE) as? LocationManager
         val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
         deviceId = prefs.getString("device_id", null) ?: "device_${(1000..9999).random()}"
         prefs.edit().putString("device_id", deviceId).apply()
@@ -71,9 +82,25 @@ class LocationService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 password = intent.getStringExtra("password") ?: ""
+                if (password.isNotEmpty()) {
+                    getSharedPreferences("prefs", MODE_PRIVATE).edit()
+                        .putString("monitor_password", password).apply()
+                }
                 start()
             }
             ACTION_STOP -> stopService()
+            null -> {
+                // OS restarted us after being killed (START_STICKY). Restore from saved state.
+                val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+                password = prefs.getString("monitor_password", "") ?: ""
+                if (password.isNotEmpty()) {
+                    Log.d(TAG, "OS restart, restoring with saved password")
+                    start()
+                } else {
+                    Log.w(TAG, "OS restart but no saved password, stopping")
+                    stopSelf()
+                }
+            }
         }
         return START_STICKY
     }
@@ -87,7 +114,18 @@ class LocationService : Service() {
         }
         isRunning = true
 
-        startForeground(NOTIFICATION_ID, buildNotification())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification())
+        }
+
+        // Write initial heartbeat
+        getSharedPreferences("prefs", MODE_PRIVATE).edit()
+            .putLong("service_heartbeat", System.currentTimeMillis()).apply()
+
+        // Schedule watchdog alarm
+        scheduleWatchdog()
 
         // Check location enabled
         if (!isLocationEnabled()) {
@@ -98,21 +136,30 @@ class LocationService : Service() {
         mqttManager = MqttManager(clientId = deviceId, context = this).apply {
             onConnected = {
                 mqttStatus = "MQTT已连接"
+                getSharedPreferences("prefs", MODE_PRIVATE).edit()
+                    .putBoolean("mqtt_connected", true)
+                    .putLong("mqtt_disconnected_at", 0).apply()
                 updateNotification()
                 flushQueue("oldman/pwd/$password/location")
             }
             onConnectFailed = { err ->
                 mqttStatus = "MQTT失败: $err"
+                getSharedPreferences("prefs", MODE_PRIVATE).edit()
+                    .putBoolean("mqtt_connected", false)
+                    .putLong("mqtt_disconnected_at", System.currentTimeMillis()).apply()
                 updateNotification()
-                handler.postDelayed({ connect() }, 10000)
+                handler.postDelayed(reconnectTask, 10000)
             }
             onConnectionLost = {
                 mqttStatus = "MQTT断线"
+                getSharedPreferences("prefs", MODE_PRIVATE).edit()
+                    .putBoolean("mqtt_connected", false)
+                    .putLong("mqtt_disconnected_at", System.currentTimeMillis()).apply()
                 updateNotification()
-                handler.postDelayed({ connect() }, 5000)
+                handler.postDelayed(reconnectTask, 5000)
             }
         }
-        mqttManager?.connect()
+        connect()
 
         reportLocation()
         handler.postDelayed(reportTask, reportInterval)
@@ -124,18 +171,42 @@ class LocationService : Service() {
     private fun connect() {
         mqttStatus = "MQTT重连中..."
         updateNotification()
-        mqttManager?.connect()
+        executor.execute {
+            mqttManager?.connect()
+        }
     }
 
     private fun stopService() {
         isRunning = false
         handler.removeCallbacks(reportTask)
         handler.removeCallbacks(healthCheckTask)
-        getSharedPreferences("prefs", MODE_PRIVATE).edit().putBoolean("monitoring_active", false).apply()
+        handler.removeCallbacks(reconnectTask)
         mqttManager?.disconnect()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         Log.d(TAG, "Service stopped")
+    }
+
+    private fun scheduleWatchdog() {
+        try {
+            val alarmManager = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
+            val intent = Intent(this, WatchdogAlarmReceiver::class.java).apply {
+                action = WatchdogAlarmReceiver.ACTION_WATCHDOG
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                this, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val interval = 15 * 60 * 1000L
+            alarmManager.setRepeating(
+                android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + interval,
+                interval,
+                pendingIntent
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule watchdog: ${e.message}")
+        }
     }
 
     private fun isLocationEnabled(): Boolean {
@@ -195,7 +266,14 @@ class LocationService : Service() {
                 cleanup(arrayOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER), this)
                 onLocationReceived(location)
             }
-            override fun onProviderDisabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {
+                if (!cleanedUp) {
+                    cleanedUp = true
+                    cleanup(arrayOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER), this)
+                    gpsStatus = "定位provider已禁用"
+                    updateNotification()
+                }
+            }
             override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
         }
 
@@ -276,17 +354,21 @@ class LocationService : Service() {
     }
 
     private fun getBatteryLevel(): Int {
-        val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = intent?.getIntExtra("level", 0) ?: 0
-        val scale = intent?.getIntExtra("scale", 100) ?: 100
-        return level * 100 / scale
+        return try {
+            val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val level = intent?.getIntExtra("level", 0) ?: 0
+            val scale = intent?.getIntExtra("scale", 100) ?: 100
+            level * 100 / scale
+        } catch (e: Exception) {
+            -1
+        }
     }
 
     private fun buildNotification(): Notification {
         val channelId = "location_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                channelId, "位置监控", NotificationManager.IMPORTANCE_LOW
+                channelId, "位置监控", NotificationManager.IMPORTANCE_DEFAULT
             )
             val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(channel)
@@ -317,7 +399,13 @@ class LocationService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        stopService()
+        isRunning = false
+        handler.removeCallbacks(reportTask)
+        handler.removeCallbacks(healthCheckTask)
+        handler.removeCallbacks(reconnectTask)
+        getSharedPreferences("prefs", MODE_PRIVATE).edit()
+            .putBoolean("mqtt_connected", false).apply()
+        mqttManager?.disconnect()
         super.onDestroy()
     }
 

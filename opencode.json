@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "snapshot": false,
+  "watcher": {
+    "ignore": [
+      "android/app/build/**",
+      ".gradle/**",
+      ".git/**",
+      "**/build/intermediates/**"
+    ]
+  }
+}

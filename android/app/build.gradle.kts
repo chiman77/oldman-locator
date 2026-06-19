@@ -11,8 +11,8 @@ android {
         applicationId = "com.oldman.locator"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "4.3"
+        versionCode = 5
+        versionName = "4.5"
     }
 
     buildTypes {
@@ -42,7 +42,4 @@ dependencies {
 
     // Eclipse Paho MQTT
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
-
-    // WorkManager (service watchdog)
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }

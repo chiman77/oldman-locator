@@ -9,6 +9,7 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONArray
+import java.util.concurrent.atomic.AtomicInteger
 
 class MqttManager(
     private val serverUri: String = "tcp://broker.emqx.io:1883",
@@ -16,12 +17,9 @@ class MqttManager(
     private val context: Context? = null
 ) {
     private var client: MqttClient? = null
-    private var isConnecting = false
+    @Volatile private var isConnecting = false
     private val handler = Handler(Looper.getMainLooper())
     private val pendingQueue = mutableListOf<String>()
-    private val flushRunnable = object : Runnable {
-        override fun run() {}
-    }
 
     var onConnectionLost: (() -> Unit)? = null
     var onConnected: (() -> Unit)? = null
@@ -39,10 +37,18 @@ class MqttManager(
             if (client?.isConnected == true) return
             val persistence = MemoryPersistence()
             try { client?.close() } catch (_: Exception) {}
-            val uniqueId = "${clientId}_${System.currentTimeMillis() % 100000}"
+            val uniqueId = "${clientId}_${idCounter.getAndIncrement()}"
             client = MqttClient(serverUri, uniqueId, persistence)
+            client?.setCallback(object : org.eclipse.paho.client.mqttv3.MqttCallback {
+                override fun connectionLost(cause: Throwable?) {
+                    Log.w(TAG, "Connection lost: ${cause?.message}")
+                    onConnectionLost?.invoke()
+                }
+                override fun messageArrived(topic: String?, message: MqttMessage?) {}
+                override fun deliveryComplete(token: org.eclipse.paho.client.mqttv3.IMqttDeliveryToken?) {}
+            })
             val options = MqttConnectOptions().apply {
-                isAutomaticReconnect = true
+                isAutomaticReconnect = false
                 connectionTimeout = 10
                 keepAliveInterval = 30
                 isCleanSession = true
@@ -81,7 +87,11 @@ class MqttManager(
         Log.d(TAG, "Flushing ${pendingQueue.size} queued messages")
         var delay = 0L
         while (pendingQueue.isNotEmpty()) {
-            val payload = pendingQueue.removeAt(0)
+            val payload: String
+            synchronized(pendingQueue) {
+                if (pendingQueue.isEmpty()) return
+                payload = pendingQueue.removeAt(0)
+            }
             saveToPrefs()
             val d = delay
             handler.postDelayed({
@@ -103,7 +113,7 @@ class MqttManager(
     }
 
     fun disconnect() {
-        handler.removeCallbacks(flushRunnable)
+        isConnecting = false
         try {
             client?.disconnect()
             client?.close()
@@ -127,7 +137,9 @@ class MqttManager(
         context ?: return
         try {
             val arr = JSONArray()
-            pendingQueue.forEach { arr.put(it) }
+            synchronized(pendingQueue) {
+                pendingQueue.forEach { arr.put(it) }
+            }
             context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
                 .edit().putString("pending_reports", arr.toString()).apply()
         } catch (e: Exception) {
@@ -138,14 +150,16 @@ class MqttManager(
     private fun loadFromPrefs() {
         context ?: return
         try {
-            if (pendingQueue.isNotEmpty()) return
-            val raw = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
-                .getString("pending_reports", null) ?: return
-            val arr = JSONArray(raw)
-            for (i in 0 until arr.length()) {
-                pendingQueue.add(arr.getString(i))
+            synchronized(pendingQueue) {
+                if (pendingQueue.isNotEmpty()) return
+                val raw = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
+                    .getString("pending_reports", null) ?: return
+                val arr = JSONArray(raw)
+                for (i in 0 until arr.length()) {
+                    pendingQueue.add(arr.getString(i))
+                }
+                Log.d(TAG, "Loaded ${pendingQueue.size} queued messages from prefs")
             }
-            Log.d(TAG, "Loaded ${pendingQueue.size} queued messages from prefs")
         } catch (e: Exception) {
             Log.e(TAG, "Load queue error: ${e.message}")
         }
@@ -154,5 +168,6 @@ class MqttManager(
     companion object {
         private const val TAG = "MqttManager"
         private const val MAX_QUEUE_SIZE = 3
+        private val idCounter = AtomicInteger(0)
     }
 }
