@@ -55,9 +55,11 @@ class LocationService : Service() {
         override fun run() {
             if (isRunning) {
                 val connected = mqttManager?.isConnected == true
-                mqttStatus = if (connected) "MQTT已连接" else "MQTT断线"
-                updateNotification()
-                // Write heartbeat
+                val newStatus = if (connected) "MQTT已连接" else "MQTT断线"
+                if (mqttStatus != newStatus) {
+                    mqttStatus = newStatus
+                    updateNotification()
+                }
                 getSharedPreferences("prefs", MODE_PRIVATE).edit()
                     .putLong("service_heartbeat", System.currentTimeMillis()).apply()
             }
@@ -360,7 +362,7 @@ class LocationService : Service() {
         val channelId = "location_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                channelId, "位置监控", NotificationManager.IMPORTANCE_DEFAULT
+                channelId, "位置监控", NotificationManager.IMPORTANCE_LOW
             )
             val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(channel)
