@@ -9,7 +9,6 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONArray
-import java.util.concurrent.atomic.AtomicInteger
 
 class MqttManager(
     private val serverUri: String = "tcp://broker.emqx.io:1883",
@@ -18,6 +17,7 @@ class MqttManager(
 ) {
     private var client: MqttClient? = null
     @Volatile private var isConnecting = false
+    @Volatile private var intentionallyClosing = false
     private val handler = Handler(Looper.getMainLooper())
     private val pendingQueue = mutableListOf<String>()
 
@@ -36,11 +36,13 @@ class MqttManager(
         try {
             if (client?.isConnected == true) return
             val persistence = MemoryPersistence()
+            intentionallyClosing = true
             try { client?.close() } catch (_: Exception) {}
-            val uniqueId = "${clientId}_${idCounter.getAndIncrement()}"
-            client = MqttClient(serverUri, uniqueId, persistence)
+            intentionallyClosing = false
+            client = MqttClient(serverUri, clientId, persistence)
             client?.setCallback(object : org.eclipse.paho.client.mqttv3.MqttCallback {
                 override fun connectionLost(cause: Throwable?) {
+                    if (intentionallyClosing) return
                     Log.w(TAG, "Connection lost: ${cause?.message}")
                     onConnectionLost?.invoke()
                 }
@@ -77,7 +79,6 @@ class MqttManager(
         } catch (e: Exception) {
             Log.e(TAG, "Publish failed: ${e.message}")
             queueMessage(payload)
-            onConnectionLost?.invoke()
         }
     }
 
@@ -114,12 +115,15 @@ class MqttManager(
 
     fun disconnect() {
         isConnecting = false
+        intentionallyClosing = true
         try {
             client?.disconnect()
             client?.close()
             client = null
         } catch (e: Exception) {
             Log.e(TAG, "Disconnect error: ${e.message}")
+        } finally {
+            intentionallyClosing = false
         }
     }
 
@@ -168,6 +172,5 @@ class MqttManager(
     companion object {
         private const val TAG = "MqttManager"
         private const val MAX_QUEUE_SIZE = 3
-        private val idCounter = AtomicInteger(0)
     }
 }

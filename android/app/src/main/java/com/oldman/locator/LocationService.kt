@@ -53,7 +53,7 @@ class LocationService : Service() {
 
     private val healthCheckTask = object : Runnable {
         override fun run() {
-            if (isRunning && mqttManager?.isConnected != true) {
+            if (isRunning && mqttManager?.isConnected != true && reconnectAttempts == 0) {
                 Log.w(TAG, "Health check: MQTT not connected, reconnecting")
                 mqttStatus = "MQTT重连中..."
                 updateNotification()
@@ -68,7 +68,11 @@ class LocationService : Service() {
         }
     }
 
-    private val reconnectTask = Runnable { connect() }
+    private var reconnectAttempts = 0
+    private val reconnectTask = Runnable {
+        if (!isRunning) return@Runnable
+        connect()
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -135,6 +139,7 @@ class LocationService : Service() {
 
         mqttManager = MqttManager(clientId = deviceId, context = this).apply {
             onConnected = {
+                reconnectAttempts = 0
                 mqttStatus = "MQTT已连接"
                 getSharedPreferences("prefs", MODE_PRIVATE).edit()
                     .putBoolean("mqtt_connected", true)
@@ -148,7 +153,9 @@ class LocationService : Service() {
                     .putBoolean("mqtt_connected", false)
                     .putLong("mqtt_disconnected_at", System.currentTimeMillis()).apply()
                 updateNotification()
-                handler.postDelayed(reconnectTask, 10000)
+                reconnectAttempts++
+                val delay = Math.min(10000L * (1L shl Math.min(reconnectAttempts - 1, 3)), 60000L)
+                handler.postDelayed(reconnectTask, delay)
             }
             onConnectionLost = {
                 mqttStatus = "MQTT断线"
@@ -156,7 +163,9 @@ class LocationService : Service() {
                     .putBoolean("mqtt_connected", false)
                     .putLong("mqtt_disconnected_at", System.currentTimeMillis()).apply()
                 updateNotification()
-                handler.postDelayed(reconnectTask, 5000)
+                reconnectAttempts++
+                val delay = Math.min(5000L * (1L shl Math.min(reconnectAttempts - 1, 3)), 60000L)
+                handler.postDelayed(reconnectTask, delay)
             }
         }
         connect()
