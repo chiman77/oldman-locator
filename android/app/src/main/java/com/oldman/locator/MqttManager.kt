@@ -50,9 +50,9 @@ class MqttManager(
                 override fun deliveryComplete(token: org.eclipse.paho.client.mqttv3.IMqttDeliveryToken?) {}
             })
             val options = MqttConnectOptions().apply {
-                isAutomaticReconnect = false
+                isAutomaticReconnect = true
                 connectionTimeout = 10
-                keepAliveInterval = 30
+                keepAliveInterval = 60
                 isCleanSession = true
             }
             client?.connect(options)

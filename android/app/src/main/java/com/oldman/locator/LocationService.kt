@@ -53,25 +53,16 @@ class LocationService : Service() {
 
     private val healthCheckTask = object : Runnable {
         override fun run() {
-            if (isRunning && mqttManager?.isConnected != true && reconnectAttempts == 0) {
-                Log.w(TAG, "Health check: MQTT not connected, reconnecting")
-                mqttStatus = "MQTT重连中..."
-                updateNotification()
-                connect()
-            }
-            // Write heartbeat
             if (isRunning) {
+                val connected = mqttManager?.isConnected == true
+                mqttStatus = if (connected) "MQTT已连接" else "MQTT断线"
+                updateNotification()
+                // Write heartbeat
                 getSharedPreferences("prefs", MODE_PRIVATE).edit()
                     .putLong("service_heartbeat", System.currentTimeMillis()).apply()
             }
             handler.postDelayed(this, 60000)
         }
-    }
-
-    private var reconnectAttempts = 0
-    private val reconnectTask = Runnable {
-        if (!isRunning) return@Runnable
-        connect()
     }
 
     override fun onCreate() {
@@ -139,7 +130,6 @@ class LocationService : Service() {
 
         mqttManager = MqttManager(clientId = deviceId, context = this).apply {
             onConnected = {
-                reconnectAttempts = 0
                 mqttStatus = "MQTT已连接"
                 getSharedPreferences("prefs", MODE_PRIVATE).edit()
                     .putBoolean("mqtt_connected", true)
@@ -153,9 +143,6 @@ class LocationService : Service() {
                     .putBoolean("mqtt_connected", false)
                     .putLong("mqtt_disconnected_at", System.currentTimeMillis()).apply()
                 updateNotification()
-                reconnectAttempts++
-                val delay = Math.min(10000L * (1L shl Math.min(reconnectAttempts - 1, 3)), 60000L)
-                handler.postDelayed(reconnectTask, delay)
             }
             onConnectionLost = {
                 mqttStatus = "MQTT断线"
@@ -163,9 +150,6 @@ class LocationService : Service() {
                     .putBoolean("mqtt_connected", false)
                     .putLong("mqtt_disconnected_at", System.currentTimeMillis()).apply()
                 updateNotification()
-                reconnectAttempts++
-                val delay = Math.min(5000L * (1L shl Math.min(reconnectAttempts - 1, 3)), 60000L)
-                handler.postDelayed(reconnectTask, delay)
             }
         }
         connect()
@@ -189,7 +173,6 @@ class LocationService : Service() {
         isRunning = false
         handler.removeCallbacks(reportTask)
         handler.removeCallbacks(healthCheckTask)
-        handler.removeCallbacks(reconnectTask)
         mqttManager?.disconnect()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -411,7 +394,6 @@ class LocationService : Service() {
         isRunning = false
         handler.removeCallbacks(reportTask)
         handler.removeCallbacks(healthCheckTask)
-        handler.removeCallbacks(reconnectTask)
         getSharedPreferences("prefs", MODE_PRIVATE).edit()
             .putBoolean("mqtt_connected", false).apply()
         mqttManager?.disconnect()

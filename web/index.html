@@ -184,9 +184,10 @@ body { font-family: -apple-system, sans-serif; }
       var client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
         clientId: 'web_' + Math.random().toString(36).substr(2, 8),
         clean: true,
-        reconnectPeriod: 5000,
-        connectTimeout: 10000,
-        keepalive: 30
+        protocolVersion: 4,
+        reconnectPeriod: 10000,
+        connectTimeout: 15000,
+        keepalive: 60
       })
 
       var devices = {}
@@ -632,9 +633,10 @@ body { font-family: -apple-system, sans-serif; }
         lastMessageTime = Date.now()
         updateDevice(topic, msg.toString())
       })
-      client.on('reconnect', function() { mqttStatusEl.textContent = 'MQTT: 重连中...'; mqttStatusEl.style.color = '#faad14' })
-      client.on('close', function() { mqttStatusEl.textContent = 'MQTT: 断开'; mqttStatusEl.style.color = '#ff4d4f' })
-      client.on('error', function(e) { log('MQTT err: ' + (e.message||'?'), true) })
+      client.on('reconnect', function() { mqttStatusEl.textContent = 'MQTT: 重连中...'; mqttStatusEl.style.color = '#faad14'; log('MQTT reconnect') })
+      client.on('close', function() { mqttStatusEl.textContent = 'MQTT: 断开'; mqttStatusEl.style.color = '#ff4d4f'; log('MQTT disconnected', true) })
+      client.on('offline', function() { mqttStatusEl.textContent = 'MQTT: 离线'; mqttStatusEl.style.color = '#ff4d4f'; log('MQTT offline', true) })
+      client.on('error', function(e) { log('MQTT err: ' + (e.message||'?'), true); diagEl.textContent = 'MQTT err: ' + (e.message||'?'); diagEl.style.display = 'block'; setTimeout(function(){diagEl.style.display='none'},5000) })
     } else {
       log('MQTT not loaded', true)
     }
@@ -648,19 +650,18 @@ body { font-family: -apple-system, sans-serif; }
     if (healthCheckTimer) clearInterval(healthCheckTimer)
     healthCheckTimer = setInterval(function() {
       if (typeof client !== 'undefined' && client.connected) {
-        mqttStatusEl.textContent = 'MQTT: 已连接'
-        mqttStatusEl.style.color = '#52c41a'
-        // Force reconnect if no message for 3 minutes (zombie connection detection)
         if (lastMessageTime > 0 && Date.now() - lastMessageTime > 3 * 60 * 1000) {
           log('No MQTT message for 3min, force reconnect')
           mqttStatusEl.textContent = 'MQTT: 重连中...'
           mqttStatusEl.style.color = '#faad14'
-          try { client.end(true) } catch(e) { try { client.stream.destroy() } catch(e2) {} }
           lastMessageTime = Date.now()
+          try { client.end(true) } catch(e) { try { client.stream.destroy() } catch(e2) {} }
         }
       } else {
-        mqttStatusEl.textContent = 'MQTT: 断开'
-        mqttStatusEl.style.color = '#ff4d4f'
+        if (mqttStatusEl.textContent !== 'MQTT: 重连中...') {
+          mqttStatusEl.textContent = 'MQTT: 断开'
+          mqttStatusEl.style.color = '#ff4d4f'
+        }
       }
     }, 60000)
     // Refresh when tab becomes visible
