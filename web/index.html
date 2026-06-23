@@ -285,11 +285,6 @@ body { font-family: -apple-system, sans-serif; }
               if (last.lastSeen) devices[deviceId].lastSeen = last.lastSeen
               if (last.version) devices[deviceId].version = last.version
               devices[deviceId]._synced = false
-              // Mark offline immediately if last seen > 30 min ago
-              if (last.lastSeen && (Date.now() - last.lastSeen > offlineThreshold)) {
-                devices[deviceId].offline = true
-                devices[deviceId]._synced = true
-              }
             }
           }
           // Restore trail
@@ -672,8 +667,11 @@ body { font-family: -apple-system, sans-serif; }
     if (healthCheckTimer) clearInterval(healthCheckTimer)
     healthCheckTimer = setInterval(function() {
       if (typeof client !== 'undefined' && client.connected) {
-        if (lastMessageTime > 0 && Date.now() - lastMessageTime > 3 * 60 * 1000) {
-          log('No MQTT message for 3min, force reconnect')
+        mqttStatusEl.textContent = 'MQTT: 已连接'
+        mqttStatusEl.style.color = '#52c41a'
+        // Force reconnect if no message for 10 minutes (zombie connection detection)
+        if (lastMessageTime > 0 && Date.now() - lastMessageTime > 10 * 60 * 1000) {
+          log('No MQTT message for 10min, force reconnect')
           mqttStatusEl.textContent = 'MQTT: 重连中...'
           mqttStatusEl.style.color = '#faad14'
           lastMessageTime = Date.now()
