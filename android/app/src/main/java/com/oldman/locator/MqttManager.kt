@@ -11,7 +11,7 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONArray
 
 class MqttManager(
-    private val serverUri: String = "tcp://broker.emqx.io:1883",
+    private val serverUri: String = SERVER_PRIMARY,
     private val clientId: String,
     private val context: Context? = null
 ) {
@@ -20,6 +20,12 @@ class MqttManager(
     @Volatile private var intentionallyClosing = false
     private val handler = Handler(Looper.getMainLooper())
     private val pendingQueue = mutableListOf<String>()
+    private var serverIndex = 0
+
+    private val serverList: List<String> = listOf(
+        serverUri,
+        SERVER_CN
+    )
 
     var onConnectionLost: (() -> Unit)? = null
     var onConnected: (() -> Unit)? = null
@@ -35,11 +41,12 @@ class MqttManager(
         isConnecting = true
         try {
             if (client?.isConnected == true) return
+            val uri = serverList[serverIndex]
             val persistence = MemoryPersistence()
             intentionallyClosing = true
             try { client?.close() } catch (_: Exception) {}
             intentionallyClosing = false
-            client = MqttClient(serverUri, clientId, persistence)
+            client = MqttClient(uri, clientId, persistence)
             client?.setCallback(object : org.eclipse.paho.client.mqttv3.MqttCallback {
                 override fun connectionLost(cause: Throwable?) {
                     if (intentionallyClosing) return
@@ -56,10 +63,12 @@ class MqttManager(
                 isCleanSession = true
             }
             client?.connect(options)
+            serverIndex = 0
             onConnected?.invoke()
-            Log.d(TAG, "Connected to $serverUri")
+            Log.d(TAG, "Connected to $uri")
         } catch (e: Exception) {
-            Log.e(TAG, "Connect failed: ${e.message}")
+            Log.e(TAG, "Connect failed (server ${serverList[serverIndex]}): ${e.message}")
+            serverIndex = (serverIndex + 1) % serverList.size
             onConnectFailed?.invoke(e.message ?: "unknown error")
         } finally {
             isConnecting = false
@@ -172,5 +181,7 @@ class MqttManager(
     companion object {
         private const val TAG = "MqttManager"
         private const val MAX_QUEUE_SIZE = 3
+        private const val SERVER_PRIMARY = "tcp://broker.emqx.io:1883"
+        private const val SERVER_CN = "tcp://broker-cn.emqx.io:1883"
     }
 }
